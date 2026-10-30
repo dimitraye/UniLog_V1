@@ -1,61 +1,107 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+
+import { useState } from 'react';
+import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MangaRepository } from '@/features/manga/repositories/MangaRepository';
+import type { Manga } from '@/features/manga/models/Manga';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+import {
+  BottomTabInset,
+  MaxContentWidth,
+  Spacing,
+} from '@/constants/theme';
 
 export default function HomeScreen() {
+  const [isTesting, setIsTesting] = useState(false);
+  const [result, setResult] = useState('');
+
+  async function testSQLite() {
+    setIsTesting(true);
+    setResult('');
+
+    const now = new Date().toISOString();
+
+    const testManga: Manga = {
+      id: `test-manga-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: 'One Piece',
+      category: 'manga',
+
+      authors: ['Eiichiro Oda'],
+      genres: ['Action', 'Aventure'],
+      publicationStatus: 'ongoing',
+      totalVolumes: 100,
+
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      // 1. Enregistrer le manga
+      await MangaRepository.create(testManga);
+
+      // 2. Récupérer le manga depuis SQLite
+      const savedManga = await MangaRepository.getById(testManga.id);
+
+      // 3. Vérifier le résultat
+      if (!savedManga) {
+        throw new Error('Le manga enregistré est introuvable.');
+      }
+
+      if (
+        savedManga.title !== testManga.title ||
+        savedManga.authors?.[0] !== 'Eiichiro Oda' ||
+        savedManga.genres?.length !== 2
+      ) {
+        throw new Error('Les données récupérées ne correspondent pas.');
+      }
+
+      console.log('Manga successfully saved:', savedManga);
+
+      setResult(
+        `SUCCÈS !\n\nTitre : ${savedManga.title}\nAuteur : ${savedManga.authors?.[0]}\nGenres : ${savedManga.genres?.join(', ')}\nTomes : ${savedManga.totalVolumes}`
+      );
+    } catch (error) {
+      console.error('SQLite test failed:', error);
+
+      setResult(
+        `ÉCHEC DU TEST :\n${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsTesting(false);
+    }
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+        <ThemedText type="title">UniLog</ThemedText>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
+        <ThemedText type="subtitle">
+          Test de la base de données
         </ThemedText>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        <Pressable
+          onPress={testSQLite}
+          disabled={isTesting}
+          style={({ pressed }) => [
+            styles.button,
+            pressed && styles.pressed,
+            isTesting && styles.disabled,
+          ]}
+        >
+          <ThemedText type="smallBold">
+            {isTesting ? 'Test en cours...' : 'Tester SQLite'}
+          </ThemedText>
+        </Pressable>
 
-        {Platform.OS === 'web' && <WebBadge />}
+        {result !== '' && (
+          <ThemedView type="backgroundElement" style={styles.resultContainer}>
+            <ThemedText>{result}</ThemedText>
+          </ThemedView>
+        )}
       </SafeAreaView>
     </ThemedView>
   );
@@ -71,28 +117,27 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    gap: Spacing.three,
+    justifyContent: 'center',
+    gap: Spacing.four,
     paddingBottom: BottomTabInset + Spacing.three,
     maxWidth: MaxContentWidth,
   },
-  heroSection: {
+  button: {
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.five,
+    borderRadius: Spacing.three,
+    backgroundColor: '#4B75D1',
     alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
   },
-  title: {
-    textAlign: 'center',
+  pressed: {
+    opacity: 0.7,
   },
-  code: {
-    textTransform: 'uppercase',
+  disabled: {
+    opacity: 0.5,
   },
-  stepContainer: {
-    gap: Spacing.three,
+  resultContainer: {
     alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    padding: Spacing.four,
+    borderRadius: Spacing.three,
   },
 });
